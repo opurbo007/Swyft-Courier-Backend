@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  DRIVER
+  ADMIN
+}
+
+enum DriverStatus {
+  OFFLINE
+  ONLINE
+  DELIVERY
+}
+
+enum OrderStatus {
+  SCHEDULED
+  UNASSIGNED
+  WAITING
+  ACCEPTED
+  ON_THE_WAY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  ONLINE
+}
+
+enum DriverStatus{
+  OFFLINE
+  ONLINE
+  FREE
+  BUSY
+}
+
+model User {
+  id           String        @id @default(uuid())
+  role         UserRole
+  fullName     String
+  email        String?       @unique
+  phone        String?       @unique
+  password     String?
+  photoUrl     String?
+  status       UserStatus
+  isActive     Boolean       @default(true)
+  isVerified   Boolean       @default(false)
+  isBanned     Boolean       @default(false)
+  resetToken   String?
+  resetExpires DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  driverProfile DriverProfile?
+  orders        Order[]      @relation("UserOrders")
+  notifications Notification[]
+}
+
+model DriverProfile {
+  id                  String        @id @default(uuid())
+  user                User          @relation(fields: [userId], references: [id])
+  userId              String        @unique
+  status              DriverStatus  @default(OFFLINE)
+  totalDeliveries     Int           @default(0)
+  totalHours          Int           @default(0)
+  averageDistance     Float?        @default(0)
+  averageCompletionMin Float?       @default(0)
+  bankAccount         String?
+  lastOnline          DateTime?
+  maxConcurrentOrders Int           @default(1)
+  acceptTimeoutSeconds Int          @default(30)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  activeOrders  Order[]          @relation("DriverOrders")
+  sessions      DriverSession[]
+  locations     DriverLocation[]
+  notifications Notification[]
+}
+
+model Store {
+  id              String   @id @default(uuid())
+  name            String
+  address         String?
+  phone           String?
+  latitude        Float?
+  longitude       Float?
+  maxDriverOrders Int      @default(3)
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orders Order[]
+  discounts ShopDiscount[]
+}
+
+model Order {
+  id               String        @id @default(uuid())
+  store       Store?         @relation(fields: [storeId], references: [id])
+  storeId     String?
+  status           OrderStatus   @default(UNASSIGNED)
+  paymentMethod    PaymentMethod @default(COD)
+  scheduledTime    DateTime?
+  autoRejectedAt   DateTime?
+  instructions     String?
+  parcelWeight     Float?
+  pickupAddress    String  
+  pickupTime       DateTime?
+  pickupLat        Float?
+  pickupLng        Float?
+  deliveredAddress String
+  contact          String
+  deliveredTime    DateTime?
+  deliveredLat     Float?
+  deliveredLng     Float?
+  distanceKm       Float?
+  expectedMinutes  Int?
+  deliveredFee     Float?
+  commission       Float?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  driver      DriverProfile? @relation("DriverOrders", fields: [driverId], references: [id])
+  driverId    String?
+  createdBy   User?          @relation("UserOrders", fields: [createdById], references: [id])
+  createdById String?
+  completion OrderCompletion?
+}
+
+model OrderCompletion {
+  id          String   @id @default(uuid())
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String   @unique
+  completedAt DateTime @default(now())
+  photoUrl    String?
+  note        String?
+}
+
+model DriverSession {
+  id           String        @id @default(uuid())
+  driver       DriverProfile @relation(fields: [driverId], references: [id])
+  driverId     String
+  isOnline     Boolean       @default(false)
+  status       DriverStatus  @default(OFFLINE)
+  sessionToken String?
+  lastSeenAt   DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model DriverLocation {
+  id         String        @id @default(uuid())
+  driver     DriverProfile @relation(fields: [driverId], references: [id])
+  driverId   String
+  latitude   Float
+  longitude  Float
+  accuracyM  Float?
+  speed      Float?
+  bearing    Float?
+  recordedAt DateTime      @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SystemConfig {
+  id                       String   @id @default(uuid())
+  autoRejectSeconds        Int      @default(30)
+  driverRadiusMeters       Int      @default(5000)
+  orderGroupTimeWindowMin  Int      @default(10)
+  orderExtraTimeLimitMin   Int      @default(15)
+  defaultMaxDriverOrders   Int      @default(3)
+  requireCompletionPhoto   Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model ShopDiscount {
+  id       String   @id @default(uuid())
+  store    Store    @relation(fields: [storeId], references: [id])
+  storeId  String
+  description String
+  percentage  Float
+  validFrom   DateTime
+  validTo     DateTime
+}
